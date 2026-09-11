@@ -1,15 +1,13 @@
-# Chatting with AI
+# Chatting with AI Plus
 
-[![Latest release](https://img.shields.io/github/v/release/o1xhack/obsidian-chatting?include_prereleases&label=release&color=7c3aed)](https://github.com/o1xhack/obsidian-chatting/releases)
-[![Total downloads](https://img.shields.io/github/downloads/o1xhack/obsidian-chatting/total?color=7c3aed)](https://github.com/o1xhack/obsidian-chatting/releases)
-[![License](https://img.shields.io/github/license/o1xhack/obsidian-chatting?color=7c3aed)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/nagisa525/obsidian-chatting-plus?include_prereleases&label=release&color=7c3aed)](https://github.com/nagisa525/obsidian-chatting-plus/releases)
+[![Total downloads](https://img.shields.io/github/downloads/nagisa525/obsidian-chatting-plus/total?color=7c3aed)](https://github.com/nagisa525/obsidian-chatting-plus/releases)
+[![License](https://img.shields.io/github/license/nagisa525/obsidian-chatting-plus?color=7c3aed)](LICENSE)
 [![Obsidian](https://img.shields.io/badge/obsidian-1.11.4%2B-7c3aed)](https://obsidian.md)
-<br>
-[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-o1xhack-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/o1xhack)
 
 **An agentic AI assistant that lives in your Obsidian vault — same experience on phone, tablet, and desktop.**
 
-> 🌐 **English** · [简体中文](docs/i18n/README.zh-CN.md) · [繁體中文](docs/i18n/README.zh-TW.md) · [日本語](docs/i18n/README.ja.md)
+> Chatting with AI Plus is an independent MIT-licensed fork of [Chatting with AI](https://github.com/o1xhack/obsidian-chatting). It preserves the upstream authors' copyright and adds named conversation history, image input, Markdown math rendering, and a stable mobile chat layout.
 
 <p align="center">
   <img src="assets/screenshot-settings.png" alt="Provider settings on iPhone" width="260">
@@ -25,6 +23,9 @@
 - **14 vault-native tools** — read, edit, search, create, rename, frontmatter, backlinks. The agent goes from idea to changed files without leaving the chat.
 - **Mobile-parity, by design** — no streaming, no Node-only modules, no localhost callbacks. iOS and Android behave the same as desktop.
 - **Selection scope** — highlight text in any note, send it to chat, the assistant edits only inside the selection.
+- **Named conversation history** — create, switch, rename, and delete independent conversations from a compact history drawer.
+- **Image-aware chat** — attach or paste images for supported Anthropic, OpenAI, and ChatGPT account models.
+- **Rendered Markdown and math** — answers use Obsidian's native Markdown renderer, including common LaTeX delimiters.
 - **Secrets in the OS keychain** — never in `data.json`, never synced across devices.
 
 ## 🎬 One conversation, many tools
@@ -61,6 +62,18 @@ You: tighten this — keep my voice
 
 The agent uses find-and-replace scoped to the selection text. Everything outside the highlight stays untouched.
 
+## 💬 Conversation history
+
+Use the **New conversation** button in the chat header to name and start a separate conversation. Open **History** to switch conversations, rename them, or delete conversations you no longer need. Each conversation keeps its own visible transcript and model context, and the most recently active conversation is restored after Obsidian restarts.
+
+## 🖼️ Image attachments
+
+Select the image button beside the composer or paste images directly into the input. A message can contain up to four PNG, JPEG, WebP, or GIF images, with an 8 MB limit per image. Images are sent to the selected AI provider as part of the conversation; make sure you are comfortable sharing their contents with that provider.
+
+## ∑ Markdown and math
+
+Assistant responses are rendered with Obsidian's Markdown renderer. Inline and display math work with `$...$` and `$$...$$`; common AI output using `\(...\)`, `\[...\]`, or fenced `math`, `latex`, and `tex` blocks is normalized automatically without rewriting examples inside ordinary code blocks.
+
 ## 🛠️ 14 vault-native tools
 
 | Group | Tools | What they do |
@@ -82,40 +95,32 @@ The agent uses find-and-replace scoped to the selection text. Everything outside
 ## 🚀 Quick start
 
 1. Open **Settings → Community plugins → Browse**.
-2. Search for **Chatting with AI**.
+2. Search for **Chatting with AI Plus**.
 3. Click **Install**, then **Enable**.
-4. **Settings → Chatting with AI** → pick a provider, paste an API key (or click **Connect ChatGPT**).
+4. **Settings → Chatting with AI Plus** → pick a provider, paste an API key (or click **Connect ChatGPT**).
 5. Open the chat from the ribbon icon or the command palette.
 
 ## 📦 Install
 
-### Community Plugins (recommended)
+### Community Plugins
 
-This is the default install path now that Chatting with AI is in the official Obsidian Community Plugins directory.
+After the initial release is accepted into the Community Plugins directory:
 
 1. In Obsidian, open **Settings → Community plugins**.
 2. If prompted, turn off Restricted Mode / turn on community plugins.
-3. Click **Browse** and search for **Chatting with AI**.
+3. Click **Browse** and search for **Chatting with AI Plus**.
 4. Click **Install**, then **Enable**.
 
-### Migrating from BRAT
+### Installing alongside the upstream plugin
 
-If you previously installed the beta through BRAT, move to the community version once it appears in the plugin browser:
-
-1. In **Settings → Community plugins → Installed plugins**, disable **Chatting with AI**.
-2. Open **BRAT** settings and remove `o1xhack/obsidian-chatting` from the beta plugin list.
-3. Return to **Settings → Community plugins → Browse** and search for **Chatting with AI**.
-4. If Obsidian shows it as **Installed**, open its entry and click **Enable**. If it shows **Install**, click **Install**, then **Enable**.
-5. Open **Settings → Chatting with AI** and confirm your provider settings are still present.
-
-The plugin migrates data from the old `obsidian-chatting` folder to `chatting-with-ai` on first load. If you used a very old beta and the community browser does not recognize it as installed, installing the community version is still safe; the migration runs when the new plugin starts.
+Chatting with AI Plus uses its own plugin ID, settings, chat history, view type, and SecretStorage keys. It can be installed alongside Chatting with AI without reading, moving, or deleting the upstream plugin's data. Provider credentials must be configured separately on each device.
 
 <details>
 <summary><b>Manual release install</b></summary>
 
-1. Download `main.js`, `manifest.json`, `styles.css` from the [latest release](https://github.com/o1xhack/obsidian-chatting/releases/latest)
-2. Place them in `<vault>/.obsidian/plugins/chatting-with-ai/`
-3. Reload Obsidian and enable **Chatting with AI** in Community Plugins
+1. Download `main.js`, `manifest.json`, `styles.css` from the [latest release](https://github.com/nagisa525/obsidian-chatting-plus/releases/latest)
+2. Place them in `<vault>/.obsidian/plugins/chatting-with-ai-plus/`
+3. Reload Obsidian and enable **Chatting with AI Plus** in Community Plugins
 
 </details>
 
@@ -123,8 +128,8 @@ The plugin migrates data from the old `obsidian-chatting` folder to `chatting-wi
 <summary><b>Build from source</b></summary>
 
 ```bash
-git clone https://github.com/o1xhack/obsidian-chatting.git
-cd obsidian-chatting
+git clone https://github.com/nagisa525/obsidian-chatting-plus.git
+cd obsidian-chatting-plus
 npm install
 npm run build
 ```
@@ -132,7 +137,7 @@ npm run build
 Symlink into a test vault:
 
 ```bash
-ln -s "$(pwd)" /path/to/vault/.obsidian/plugins/chatting-with-ai
+ln -s "$(pwd)" /path/to/vault/.obsidian/plugins/chatting-with-ai-plus
 ```
 
 </details>
@@ -145,7 +150,7 @@ ln -s "$(pwd)" /path/to/vault/.obsidian/plugins/chatting-with-ai
 | **Three sane providers** | Anthropic + OpenAI for stability, ChatGPT account for users who'd rather not manage an API key. |
 | **Secrets in the keychain** | API keys and OAuth credentials go through Obsidian SecretStorage. They never land in `data.json`, so they never sync to other devices. |
 | **No vault indexing** | Linear search, capped. Predictable, no background work, no memory pressure on phones. |
-| **Conversation persists** | Chat history survives Obsidian restarts. Stored locally in `chat-state.json`, never synced. |
+| **Conversations persist** | Named conversation histories survive Obsidian restarts. Stored locally in `chat-state.json`, never synced. |
 | **Right sidebar on mobile** | Slides in from the edge — your document stays visible underneath. |
 
 ## 🗺️ Roadmap
@@ -154,9 +159,10 @@ ln -s "$(pwd)" /path/to/vault/.obsidian/plugins/chatting-with-ai
 - [x] 14 vault-native tools
 - [x] iOS / Android parity
 - [x] Selection scope
-- [x] Official Obsidian Community Plugins listing
-- [ ] Multi-conversation history with archive / search
-- [ ] Image attachments where the provider supports them
+- [ ] Official Obsidian Community Plugins listing
+- [x] Multi-conversation history with rename and delete
+- [x] Image attachments where the provider supports them
+- [ ] Conversation archive and search
 - [ ] More upstream provider models picked up automatically as they ship
 
 Have a request? Open an issue.
@@ -194,7 +200,7 @@ Probably not — keeping the provider list small is a deliberate choice. Two API
 <details>
 <summary><b>Where is chat history stored? Will it sync?</b></summary>
 
-Locally in `<vault>/.obsidian/plugins/chatting-with-ai/chat-state.json`. It is **not** synced by Obsidian Sync (plugin data files are excluded by default). API keys live in the OS keychain via SecretStorage and are also not synced.
+Locally in `<vault>/.obsidian/plugins/chatting-with-ai-plus/chat-state.json`. It is **not** synced by Obsidian Sync (plugin data files are excluded by default). API keys and ChatGPT OAuth credentials live in the OS keychain through SecretStorage and are also not synced.
 
 </details>
 
@@ -208,7 +214,7 @@ Issues and PRs welcome. Before opening a PR:
 
 ## 🙏 Acknowledgements
 
-Originally derived from [omarshahine/obsidian-chat](https://github.com/omarshahine/obsidian-chat) (MIT). The original copyright is preserved in `LICENSE`. Chatting with AI is now an independent project with its own roadmap — major rewrites include the agent loop, mobile-parity work, the ChatGPT account provider, and the selection-scope feature.
+Chatting with AI Plus is derived from [o1xhack/obsidian-chatting](https://github.com/o1xhack/obsidian-chatting), which was originally derived from [omarshahine/obsidian-chat](https://github.com/omarshahine/obsidian-chat). Both upstream projects are MIT licensed. Their copyright notices are preserved in `LICENSE`, and this fork documents its additional work above.
 
 ## 📄 License
 
@@ -216,4 +222,4 @@ Originally derived from [omarshahine/obsidian-chat](https://github.com/omarshahi
 
 ---
 
-Author: [Yuxiao (o1xhack)](https://github.com/o1xhack) · [app.o1xhack.com](https://app.o1xhack.com)
+Maintainer: [nagisa525](https://github.com/nagisa525)

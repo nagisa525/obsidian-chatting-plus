@@ -32,9 +32,21 @@ export const CHATGPT_OAUTH_DEFAULT_MODEL = "gpt-5.5";
 
 // ─── Unified Message Format ─────────────────────────────────────────────────
 
+export interface ImageAttachment {
+  /** Stable identifier used by the attachment preview UI. */
+  id: string;
+  /** Original filename, or a generated name for clipboard images. */
+  name: string;
+  /** Supported image MIME type (PNG, JPEG, WebP, or GIF). */
+  mediaType: string;
+  /** Base64-encoded data URL sent to the selected model provider. */
+  dataUrl: string;
+}
+
 export interface ContentBlock {
-  type: "text" | "tool_use" | "tool_result";
+  type: "text" | "image" | "tool_use" | "tool_result";
   text?: string;
+  image?: ImageAttachment;
   id?: string;
   name?: string;
   input?: Record<string, unknown>;
@@ -91,6 +103,32 @@ export interface SelectionScope {
 export interface ToolResult {
   result: string;
   isError: boolean;
+}
+
+// ─── Conversation History ───────────────────────────────────────────────────
+
+export interface ChatHistoryEntry {
+  type: string;
+  text?: string;
+  images?: ImageAttachment[];
+  imageNames?: string[];
+  toolName?: string;
+  toolInput?: Record<string, unknown>;
+  toolResult?: ToolResult;
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ConversationRecord extends ConversationSummary {
+  /** Prevent automatic title generation from replacing a user-defined name. */
+  customTitle?: boolean;
+  chatHistory: ChatHistoryEntry[];
+  agentMessages: UnifiedMessage[];
 }
 
 // ─── Agent Loop Callbacks ───────────────────────────────────────────────────

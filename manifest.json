@@ -1,11 +1,10 @@
 {
-  "id": "chatting-with-ai",
-  "name": "Chatting with AI",
-  "version": "0.2.2",
+  "id": "chatting-with-ai-plus",
+  "name": "Chatting with AI Plus",
+  "version": "1.0.0",
   "minAppVersion": "1.11.4",
-  "description": "Agentic AI chat assistant that reads, edits, and creates notes through natural conversation. Supports Anthropic, OpenAI, and ChatGPT account sign-in.",
-  "author": "Yuxiao (o1xhack)",
-  "authorUrl": "https://github.com/o1xhack",
-  "fundingUrl": "https://github.com/sponsors/o1xhack",
+  "description": "Chat with Anthropic, OpenAI, or your ChatGPT account, manage named conversations, attach images, and work with Markdown notes.",
+  "author": "nagisa525",
+  "authorUrl": "https://github.com/nagisa525",
   "isDesktopOnly": false
 }

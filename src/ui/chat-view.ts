@@ -3,23 +3,42 @@ import { mount, unmount } from "svelte";
 import type { Component } from "svelte";
 import type ChatPlugin from "../main";
 import ChatContainer from "./ChatContainer.svelte";
-import type { ToolResult, SelectionScope } from "../types";
+import type {
+  ToolResult,
+  SelectionScope,
+  ImageAttachment,
+  ChatHistoryEntry,
+  ConversationSummary,
+} from "../types";
 import { getModelDisplayName } from "../settings";
 
-export const VIEW_TYPE_CHAT = "ochatting-view";
+export const VIEW_TYPE_CHAT = "chatting-with-ai-plus-view";
 
 interface ChatContainerProps {
   app: App;
   component: ObsidianChatView;
   provider: string;
   model: string;
-  onSend: (text: string, selection: SelectionScope | null) => void;
-  onClear: () => void;
+  conversations: ConversationSummary[];
+  activeConversationId: string;
+  onSend: (
+    text: string,
+    selection: SelectionScope | null,
+    images: ImageAttachment[]
+  ) => void;
   onStop: () => void;
+  onNewConversation: (title: string) => void;
+  onSelectConversation: (id: string) => void;
+  onRenameConversation: (id: string, title: string) => void;
+  onDeleteConversation: (id: string) => void;
 }
 
 interface ChatContainerApi extends Record<string, unknown> {
-  addUserMessage(text: string): void;
+  addUserMessage(
+    text: string,
+    images?: ImageAttachment[],
+    imageNames?: string[]
+  ): void;
   addAssistantMessage(text: string): void;
   addToolCall(name: string, input: Record<string, unknown>): number;
   updateToolResult(msgId: number, name: string, result: ToolResult): void;
@@ -33,10 +52,15 @@ interface ChatContainerApi extends Record<string, unknown> {
   setModel(name: string): void;
   setSelection(selection: SelectionScope): void;
   getSelection(): SelectionScope | null;
+  scrollToLastQuestion(alignment?: "top" | "center" | "bottom"): void;
+  setConversationHistory(
+    conversations: ConversationSummary[],
+    activeConversationId: string
+  ): void;
 }
 
 /**
- * Chat view for Chatting with AI.
+ * Chat view for Chatting with AI Plus.
  * Desktop: right sidebar. Mobile: right sidebar (slides in from edge).
  * Uses the plugin's shared AgentLoop and chatHistory so conversations
  * survive the view being closed and reopened (e.g. sidebar toggle).
@@ -58,7 +82,7 @@ export class ObsidianChatView extends ItemView {
   getDisplayText(): string {
     // Distinct from upstream "Chat" tab so users running both plugins
     // side-by-side can tell the workspace tabs apart.
-    return "Chatting with AI";
+    return "Chatting with AI Plus";
   }
 
   getIcon(): string {
@@ -68,7 +92,7 @@ export class ObsidianChatView extends ItemView {
   async onOpen(): Promise<void> {
     const container = this.contentEl;
     container.empty();
-    container.addClass("ochatting-view-container");
+    container.addClass("ochatting-plus-view-container");
 
     this.chatContainer = mount<ChatContainerProps, ChatContainerApi>(
       ChatContainer as unknown as Component<ChatContainerProps, ChatContainerApi>,
@@ -79,19 +103,41 @@ export class ObsidianChatView extends ItemView {
         component: this,
         provider: this.plugin.settings.provider,
         model: getModelDisplayName(this.plugin.settings.provider, this.plugin.settings.model),
-        onSend: (text: string, selection: SelectionScope | null) => {
-          void this.handleUserMessage(text, selection);
+        conversations: this.plugin.getConversationSummaries(),
+        activeConversationId: this.plugin.activeConversationId,
+        onSend: (
+          text: string,
+          selection: SelectionScope | null,
+          images: ImageAttachment[]
+        ) => {
+          void this.handleUserMessage(text, selection, images);
         },
-        onClear: () => this.handleClear(),
         onStop: () => this.handleStop(),
+        onNewConversation: (title: string) => this.handleNewConversation(title),
+        onSelectConversation: (id: string) => this.handleSelectConversation(id),
+        onRenameConversation: (id: string, title: string) => {
+          void this.plugin.renameConversation(id, title);
+        },
+        onDeleteConversation: (id: string) => this.handleDeleteConversation(id),
       },
     });
 
     // Replay chat history into the UI
-    for (const msg of this.plugin.chatHistory) {
+    this.replayHistory(this.plugin.chatHistory);
+    this.chatContainer.scrollToLastQuestion();
+    this.chatContainer.focus();
+  }
+
+  private replayHistory(history: ChatHistoryEntry[]): void {
+    if (!this.chatContainer) return;
+    for (const msg of history) {
       switch (msg.type) {
         case "user":
-          this.chatContainer.addUserMessage(msg.text!);
+          this.chatContainer.addUserMessage(
+            msg.text!,
+            msg.images ?? [],
+            msg.imageNames ?? []
+          );
           break;
         case "assistant":
           this.chatContainer.addAssistantMessage(msg.text!);
@@ -107,8 +153,6 @@ export class ObsidianChatView extends ItemView {
           break;
       }
     }
-
-    this.chatContainer.focus();
   }
 
   async onClose(): Promise<void> {
@@ -126,7 +170,7 @@ export class ObsidianChatView extends ItemView {
 
   /** Programmatically send a message */
   sendMessage(text: string): void {
-    void this.handleUserMessage(text, this.chatContainer?.getSelection() ?? null);
+    void this.handleUserMessage(text, this.chatContainer?.getSelection() ?? null, []);
   }
 
   /** Set the selection scope and show the pill */
@@ -144,14 +188,55 @@ export class ObsidianChatView extends ItemView {
     this.chatContainer?.setModel(name);
   }
 
-  /** Clear conversation */
-  clearConversation(): void {
-    this.handleClear();
+  /** Replace the visible transcript after selecting/creating a conversation. */
+  showConversation(history: ChatHistoryEntry[]): void {
+    if (!this.chatContainer) return;
+    this.chatContainer.clearMessages();
+    this.replayHistory(history);
+    this.chatContainer.scrollToLastQuestion();
+    this.chatContainer.setInputEnabled(true);
+    this.updateConversationHistory(
+      this.plugin.getConversationSummaries(),
+      this.plugin.activeConversationId
+    );
+    this.chatContainer.focus();
+  }
+
+  updateConversationHistory(
+    conversations: ConversationSummary[],
+    activeConversationId: string
+  ): void {
+    this.chatContainer?.setConversationHistory(conversations, activeConversationId);
+  }
+
+  private handleNewConversation(title: string): void {
+    if (this.running) {
+      new Notice("Wait for the current response or stop it before creating a new conversation.");
+      return;
+    }
+    void this.plugin.createConversation(title);
+  }
+
+  private handleSelectConversation(id: string): void {
+    if (this.running) {
+      new Notice("Wait for the current response or stop it before switching conversations.");
+      return;
+    }
+    void this.plugin.selectConversation(id);
+  }
+
+  private handleDeleteConversation(id: string): void {
+    if (this.running) {
+      new Notice("Wait for the current response or stop it before deleting a conversation.");
+      return;
+    }
+    void this.plugin.deleteConversation(id);
   }
 
   private async handleUserMessage(
     text: string,
-    selection: SelectionScope | null
+    selection: SelectionScope | null,
+    images: ImageAttachment[]
   ): Promise<void> {
     if (this.running) {
       new Notice("Please wait for the current response to complete.");
@@ -162,8 +247,14 @@ export class ObsidianChatView extends ItemView {
     const history = this.plugin.chatHistory;
 
     this.running = true;
-    chat.addUserMessage(text);
-    history.push({ type: "user", text });
+    chat.addUserMessage(text, images);
+    history.push({
+      type: "user",
+      text,
+      images,
+      imageNames: images.map((image) => image.name),
+    });
+    chat.scrollToLastQuestion("bottom");
     chat.setInputEnabled(false);
 
     const toolCallIds = new Map<string, number>();
@@ -191,6 +282,7 @@ export class ObsidianChatView extends ItemView {
           chat.hideThinking();
           chat.addAssistantMessage(text);
           history.push({ type: "assistant", text });
+          chat.scrollToLastQuestion("center");
         },
         onAskUser: async (question) => {
           chat.hideThinking();
@@ -204,7 +296,7 @@ export class ObsidianChatView extends ItemView {
           chat.addError(error);
           history.push({ type: "error", text: error });
         },
-      }, selection);
+      }, selection, images);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       chat.addError(`Unexpected error: ${msg}`);
@@ -230,14 +322,4 @@ export class ObsidianChatView extends ItemView {
     void this.plugin.saveChatHistory();
   }
 
-  private handleClear(): void {
-    this.plugin.agent.abort();
-    this.plugin.agent.clear();
-    this.plugin.chatHistory = [];
-    this.chatContainer?.clearMessages();
-    this.running = false;
-    this.chatContainer?.setInputEnabled(true);
-    // Clear persisted state
-    void this.plugin.saveChatHistory();
-  }
 }

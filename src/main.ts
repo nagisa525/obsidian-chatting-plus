@@ -7,7 +7,13 @@ import {
   TFile,
   type TAbstractFile,
 } from "obsidian";
-import type { ChatSettings, SelectionScope } from "./types";
+import type {
+  ChatSettings,
+  SelectionScope,
+  ChatHistoryEntry,
+  ConversationRecord,
+  ConversationSummary,
+} from "./types";
 import { DEFAULT_SETTINGS, CHATGPT_OAUTH_DEFAULT_MODEL } from "./types";
 import { ChatSettingTab, getModelDisplayName } from "./settings";
 import { ObsidianChatView, VIEW_TYPE_CHAT } from "./ui/chat-view";
@@ -16,12 +22,7 @@ import { ChatGPTOAuthStore } from "./auth/chatgptOAuthStore";
 import { ChatGPTOAuthService } from "./auth/chatgptOAuth";
 import { setChatGPTOAuthService } from "./api/chatgpt-oauth";
 
-const PLUGIN_ID = "chatting-with-ai";
-const LEGACY_PLUGIN_ID = "obsidian-chatting";
-const LEGACY_RELEASE_ASSETS = new Set(["main.js", "manifest.json", "styles.css"]);
-const SECRET_PROVIDERS = ["anthropic", "openai", "chatgpt-oauth"];
-const CHATGPT_OAUTH_SECRET_KEY = `${PLUGIN_ID}-chatgpt-oauth`;
-const LEGACY_CHATGPT_OAUTH_SECRET_KEY = `${LEGACY_PLUGIN_ID}-chatgpt-oauth`;
+const PLUGIN_ID = "chatting-with-ai-plus";
 
 export default class ChatPlugin extends Plugin {
   settings: ChatSettings = DEFAULT_SETTINGS;
@@ -30,10 +31,12 @@ export default class ChatPlugin extends Plugin {
   /** ChatGPT OAuth service (used by the chatgpt-oauth provider). */
   chatgptOAuth!: ChatGPTOAuthService;
   /** Chat messages for replaying into the UI when the view reopens */
-  chatHistory: Array<{ type: string; text?: string; toolName?: string; toolInput?: Record<string, unknown>; toolResult?: { result: string; isError: boolean } }> = [];
+  chatHistory: ChatHistoryEntry[] = [];
+  /** All saved conversations, newest activity first in the History drawer. */
+  conversations: ConversationRecord[] = [];
+  activeConversationId = "";
 
   async onload(): Promise<void> {
-    await this.migrateLegacyPluginData();
     await this.loadSettings();
 
     // Wire ChatGPT OAuth before constructing the agent: the OAuth API client
@@ -53,7 +56,7 @@ export default class ChatPlugin extends Plugin {
     this.registerView(VIEW_TYPE_CHAT, (leaf) => new ObsidianChatView(leaf, this));
 
     // Ribbon icon (users can hide; commands are the primary access)
-    this.addRibbonIcon("message-circle", "Open Chatting with AI", (evt) => {
+    this.addRibbonIcon("message-circle", "Open Chatting with AI Plus", (evt) => {
       if (evt.type === "contextmenu" || evt.button === 2) {
         // Right-click: show menu with options
         const menu = new Menu();
@@ -84,12 +87,6 @@ export default class ChatPlugin extends Plugin {
       id: "copy-transcript",
       name: "Copy conversation transcript to clipboard",
       callback: () => this.shareTranscript(),
-    });
-
-    this.addCommand({
-      id: "clear-chat",
-      name: "Clear conversation",
-      callback: () => this.clearChat(),
     });
 
     // Editor command: chat about the current note (only when editor is active)
@@ -169,9 +166,9 @@ export default class ChatPlugin extends Plugin {
 
   private notConfiguredMessage(): string {
     if (this.settings.provider === "chatgpt-oauth") {
-      return "Connect your ChatGPT account in Chatting with AI settings.";
+      return "Connect your ChatGPT account in Chatting with AI Plus settings.";
     }
-    return "Please configure your API key in Chatting with AI settings.";
+    return "Please configure your API key in Chatting with AI Plus settings.";
   }
 
   private async openChat(): Promise<void> {
@@ -270,28 +267,99 @@ export default class ChatPlugin extends Plugin {
     });
   }
 
-  private clearChat(): void {
-    const view = this.getChatView();
-    if (view) {
-      view.clearConversation();
-      new Notice("Conversation cleared.");
-    } else {
-      new Notice("No active conversation.");
-    }
+  // ─── Chat history persistence ─────────────────────────────────────────
+
+  getConversationSummaries(): ConversationSummary[] {
+    return this.conversations
+      .map(({ id, title, createdAt, updatedAt }) => ({
+        id,
+        title,
+        createdAt,
+        updatedAt,
+      }))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
-  // ─── Chat history persistence ─────────────────────────────────────────
+  async createConversation(title: string): Promise<void> {
+    const normalizedTitle = title.trim().replace(/\s+/g, " ").slice(0, 80);
+    if (!normalizedTitle) return;
+
+    this.snapshotActiveConversation();
+    this.agent.abort();
+    this.agent.clear();
+    this.chatHistory = [];
+
+    const conversation = this.makeEmptyConversation();
+    conversation.title = normalizedTitle;
+    conversation.customTitle = true;
+    this.conversations.unshift(conversation);
+    this.activeConversationId = conversation.id;
+    this.getChatView()?.showConversation(this.chatHistory);
+    await this.writeConversationState();
+    this.refreshConversationHistory();
+  }
+
+  async selectConversation(id: string): Promise<void> {
+    if (!id || id === this.activeConversationId) return;
+    const target = this.conversations.find((conversation) => conversation.id === id);
+    if (!target) return;
+
+    this.snapshotActiveConversation();
+    this.agent.abort();
+    this.agent.clear();
+    this.chatHistory = target.chatHistory.slice();
+    this.agent.importMessages(target.agentMessages.slice());
+    this.activeConversationId = target.id;
+    this.getChatView()?.showConversation(this.chatHistory);
+    await this.writeConversationState();
+    this.refreshConversationHistory();
+  }
+
+  async renameConversation(id: string, title: string): Promise<void> {
+    const conversation = this.conversations.find((item) => item.id === id);
+    const normalizedTitle = title.trim().replace(/\s+/g, " ").slice(0, 80);
+    if (!conversation || !normalizedTitle) return;
+
+    conversation.title = normalizedTitle;
+    conversation.customTitle = true;
+    conversation.updatedAt = Date.now();
+    await this.writeConversationState();
+    this.refreshConversationHistory();
+  }
+
+  async deleteConversation(id: string): Promise<void> {
+    const index = this.conversations.findIndex((conversation) => conversation.id === id);
+    if (index === -1) return;
+
+    this.snapshotActiveConversation();
+    const deletingActive = id === this.activeConversationId;
+    this.conversations.splice(index, 1);
+
+    if (this.conversations.length === 0) {
+      this.conversations.push(this.makeEmptyConversation());
+    }
+
+    if (deletingActive) {
+      const next = this.conversations
+        .slice()
+        .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+      this.agent.abort();
+      this.agent.clear();
+      this.chatHistory = next.chatHistory.slice();
+      this.agent.importMessages(next.agentMessages.slice());
+      this.activeConversationId = next.id;
+      this.getChatView()?.showConversation(this.chatHistory);
+    }
+
+    await this.writeConversationState();
+    this.refreshConversationHistory();
+  }
 
   async saveChatHistory(): Promise<void> {
     try {
-      const state = {
-        chatHistory: this.chatHistory.slice(-100), // Cap at 100 UI messages
-        agentMessages: this.agent.exportMessages().slice(-80), // Cap at 80 API messages
-      };
-      await this.app.vault.adapter.write(
-        this.chatStatePath,
-        JSON.stringify(state)
-      );
+      this.snapshotActiveConversation(true);
+      await this.writeConversationState();
+      this.refreshConversationHistory();
     } catch {
       // Persistence is best-effort
     }
@@ -299,18 +367,102 @@ export default class ChatPlugin extends Plugin {
 
   private async loadChatHistory(): Promise<void> {
     try {
-      const raw = await this.readFirstExisting([this.chatStatePath, this.legacyChatStatePath]);
+      const raw = await this.app.vault.adapter.read(this.chatStatePath);
       const state: unknown = JSON.parse(raw);
-      if (!isPersistedChatState(state)) return;
-      if (Array.isArray(state.chatHistory)) {
-        this.chatHistory = state.chatHistory;
-      }
-      if (Array.isArray(state.agentMessages)) {
-        this.agent.importMessages(state.agentMessages);
+      if (!isPersistedChatState(state)) throw new Error("Invalid chat history state");
+
+      if (Array.isArray(state.conversations) && state.conversations.length > 0) {
+        this.conversations = state.conversations
+          .map(normalizeConversation)
+          .filter((conversation): conversation is ConversationRecord => conversation !== null);
+        const requestedId = typeof state.activeConversationId === "string"
+          ? state.activeConversationId
+          : "";
+        const active = this.conversations.find((conversation) => conversation.id === requestedId)
+          ?? this.conversations[0];
+        if (active) {
+          this.activeConversationId = active.id;
+          this.chatHistory = active.chatHistory.slice();
+          this.agent.importMessages(active.agentMessages.slice());
+        }
+      } else {
+        // One-time migration from the original single-conversation state.
+        const legacyHistory = Array.isArray(state.chatHistory) ? state.chatHistory : [];
+        const legacyAgentMessages = Array.isArray(state.agentMessages) ? state.agentMessages : [];
+        const migrated = this.makeEmptyConversation();
+        migrated.chatHistory = legacyHistory as ChatHistoryEntry[];
+        migrated.agentMessages = legacyAgentMessages as ConversationRecord["agentMessages"];
+        migrated.title = deriveConversationTitle(migrated.chatHistory);
+        this.conversations = [migrated];
+        this.activeConversationId = migrated.id;
+        this.chatHistory = migrated.chatHistory.slice();
+        this.agent.importMessages(migrated.agentMessages.slice());
       }
     } catch {
       // No saved state or parse error — start fresh
     }
+
+    if (this.conversations.length === 0) {
+      const initial = this.makeEmptyConversation();
+      this.conversations = [initial];
+      this.activeConversationId = initial.id;
+      this.chatHistory = [];
+    }
+  }
+
+  private snapshotActiveConversation(touch = false): void {
+    let active = this.conversations.find(
+      (conversation) => conversation.id === this.activeConversationId
+    );
+    if (!active) {
+      active = this.makeEmptyConversation();
+      this.conversations.unshift(active);
+      this.activeConversationId = active.id;
+    }
+
+    active.chatHistory = this.chatHistory.slice(-100);
+    active.agentMessages = this.agent.exportMessages().slice(-80);
+    if (!active.customTitle) {
+      active.title = deriveConversationTitle(active.chatHistory);
+    }
+    if (touch) active.updatedAt = Date.now();
+  }
+
+  private async writeConversationState(): Promise<void> {
+    const state = {
+      version: 2,
+      activeConversationId: this.activeConversationId,
+      conversations: this.conversations.map((conversation) => ({
+        ...conversation,
+        // Keep image names in lightweight UI history, but avoid a second copy
+        // of each base64 image. Agent messages retain multi-turn image context.
+        chatHistory: conversation.chatHistory.slice(-100).map(({ images, ...message }) => ({
+          ...message,
+          imageNames: message.imageNames ?? images?.map((image) => image.name),
+        })),
+        agentMessages: conversation.agentMessages.slice(-80),
+      })),
+    };
+    await this.app.vault.adapter.write(this.chatStatePath, JSON.stringify(state));
+  }
+
+  private refreshConversationHistory(): void {
+    this.getChatView()?.updateConversationHistory(
+      this.getConversationSummaries(),
+      this.activeConversationId
+    );
+  }
+
+  private makeEmptyConversation(): ConversationRecord {
+    const now = Date.now();
+    return {
+      id: makeConversationId(),
+      title: "New conversation",
+      createdAt: now,
+      updatedAt: now,
+      chatHistory: [],
+      agentMessages: [],
+    };
   }
 
   // ─── Settings persistence ────────────────────────────────────────────
@@ -362,11 +514,7 @@ export default class ChatPlugin extends Plugin {
 
   private loadApiKey(provider: string): string {
     try {
-      return (
-        this.app.secretStorage.getSecret(`${PLUGIN_ID}-api-key-${provider}`) ||
-        this.app.secretStorage.getSecret(`${LEGACY_PLUGIN_ID}-api-key-${provider}`) ||
-        ""
-      );
+      return this.app.secretStorage.getSecret(`${PLUGIN_ID}-api-key-${provider}`) || "";
     } catch {
       return "";
     }
@@ -380,119 +528,64 @@ export default class ChatPlugin extends Plugin {
     }
   }
 
-  private async readFirstExisting(paths: string[]): Promise<string> {
-    let lastError: unknown;
-    for (const path of paths) {
-      try {
-        return await this.app.vault.adapter.read(path);
-      } catch (e) {
-        lastError = e;
-      }
-    }
-    throw lastError;
-  }
-
-  private async migrateLegacyPluginData(): Promise<void> {
-    await this.migrateLegacyDataFiles();
-    this.migrateLegacySecrets();
-  }
-
-  private async migrateLegacyDataFiles(): Promise<void> {
-    const adapter = this.app.vault.adapter;
-    try {
-      if (!(await adapter.exists(this.legacyPluginDataDir))) return;
-      await this.ensureFolder(this.pluginDataDir);
-      await this.copyLegacyPluginDataDir(this.legacyPluginDataDir, this.pluginDataDir, true);
-
-      await adapter.rmdir(this.legacyPluginDataDir, true);
-    } catch {
-      // Migration is best-effort; legacy fallback reads still protect users.
-    }
-  }
-
-  private async copyLegacyPluginDataDir(fromDir: string, toDir: string, isRoot: boolean): Promise<void> {
-    const adapter = this.app.vault.adapter;
-    const listed = await adapter.list(fromDir);
-
-    for (const folder of listed.folders) {
-      const name = folder.split("/").pop();
-      if (!name) continue;
-      const target = `${toDir}/${name}`;
-      await this.ensureFolder(target);
-      await this.copyLegacyPluginDataDir(folder, target, false);
-    }
-
-    for (const file of listed.files) {
-      const name = file.split("/").pop();
-      if (!name) continue;
-      if (isRoot && LEGACY_RELEASE_ASSETS.has(name)) continue;
-
-      const target = `${toDir}/${name}`;
-      if (!(await adapter.exists(target))) {
-        await adapter.writeBinary(target, await adapter.readBinary(file));
-      }
-    }
-  }
-
-  private async ensureFolder(path: string): Promise<void> {
-    const adapter = this.app.vault.adapter;
-    if (await adapter.exists(path)) return;
-    const parent = path.split("/").slice(0, -1).join("/");
-    if (parent) await this.ensureFolder(parent);
-    try {
-      await adapter.mkdir(path);
-    } catch {
-      // Another plugin startup path may have created it first.
-    }
-  }
-
-  private migrateLegacySecrets(): void {
-    for (const provider of SECRET_PROVIDERS) {
-      this.migrateSecret(
-        `${PLUGIN_ID}-api-key-${provider}`,
-        `${LEGACY_PLUGIN_ID}-api-key-${provider}`,
-      );
-    }
-    this.migrateSecret(CHATGPT_OAUTH_SECRET_KEY, LEGACY_CHATGPT_OAUTH_SECRET_KEY);
-  }
-
-  private migrateSecret(currentKey: string, legacyKey: string): void {
-    try {
-      const currentValue = this.app.secretStorage.getSecret(currentKey);
-      const legacyValue = this.app.secretStorage.getSecret(legacyKey);
-      if (legacyValue && !currentValue) {
-        this.app.secretStorage.setSecret(currentKey, legacyValue);
-      }
-      if (legacyValue) {
-        this.app.secretStorage.setSecret(legacyKey, "");
-      }
-    } catch {
-      // SecretStorage may be unavailable on very old Obsidian versions.
-    }
-  }
-
   private get pluginDataDir(): string {
     return `${this.app.vault.configDir}/plugins/${PLUGIN_ID}`;
-  }
-
-  private get legacyPluginDataDir(): string {
-    return `${this.app.vault.configDir}/plugins/${LEGACY_PLUGIN_ID}`;
   }
 
   private get chatStatePath(): string {
     return `${this.pluginDataDir}/chat-state.json`;
   }
 
-  private get legacyChatStatePath(): string {
-    return `${this.legacyPluginDataDir}/chat-state.json`;
-  }
 }
 
 function isPersistedChatState(value: unknown): value is {
+  activeConversationId?: string;
+  conversations?: unknown[];
   chatHistory?: ChatPlugin["chatHistory"];
   agentMessages?: Parameters<AgentLoop["importMessages"]>[0];
 } {
   return typeof value === "object" && value !== null;
+}
+
+function normalizeConversation(value: unknown): ConversationRecord | null {
+  if (!isRecord(value) || typeof value.id !== "string") return null;
+  const now = Date.now();
+  const chatHistory = Array.isArray(value.chatHistory)
+    ? value.chatHistory as ChatHistoryEntry[]
+    : [];
+  return {
+    id: value.id,
+    title: typeof value.title === "string" && value.title.trim()
+      ? value.title
+      : deriveConversationTitle(chatHistory),
+    createdAt: typeof value.createdAt === "number" ? value.createdAt : now,
+    updatedAt: typeof value.updatedAt === "number" ? value.updatedAt : now,
+    customTitle: value.customTitle === true,
+    chatHistory,
+    agentMessages: Array.isArray(value.agentMessages)
+      ? value.agentMessages as ConversationRecord["agentMessages"]
+      : [],
+  };
+}
+
+function deriveConversationTitle(history: ChatHistoryEntry[]): string {
+  const firstUser = history.find((message) => message.type === "user");
+  if (!firstUser) return "New conversation";
+
+  const imageName = firstUser.imageNames?.[0] ?? firstUser.images?.[0]?.name;
+  const rawText = firstUser.text?.trim() ?? "";
+  if ((!rawText || rawText === "Please analyze the attached image(s).") && imageName) {
+    return `Image · ${imageName}`;
+  }
+
+  const compact = rawText.replace(/\s+/g, " ");
+  if (!compact) return imageName ? `Image · ${imageName}` : "New conversation";
+  return compact.length > 42 ? `${compact.slice(0, 42)}…` : compact;
+}
+
+function makeConversationId(): string {
+  return globalThis.crypto?.randomUUID?.()
+    ?? `conversation-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function normalizeSettings(value: unknown): Partial<ChatSettings> {

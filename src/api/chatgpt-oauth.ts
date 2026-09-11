@@ -56,7 +56,7 @@ const ORIGINATOR = "opencode";
  * so we set one explicitly. This is defensive — the backend may or may not
  * gate on UA, but matching the SDK's shape avoids surprises.
  */
-const USER_AGENT = "OpenAI/JS 4.x chatting-with-ai/0.1";
+const USER_AGENT = "OpenAI/JS 4.x chatting-with-ai-plus/1.0";
 
 // We deliberately do NOT discover Codex models at runtime. The Codex
 // `/codex/models` endpoint either returns the same handful of slugs we
@@ -109,7 +109,7 @@ export async function sendChatGPTOAuthMessage(
   }
   if (!credential) {
     throw new ChatGPTOAuthError(
-      "ChatGPT OAuth is not connected. Open Settings -> Chatting with AI -> Connect ChatGPT.",
+      "ChatGPT OAuth is not connected. Open Settings -> Chatting with AI Plus -> Connect ChatGPT.",
     );
   }
 
@@ -389,10 +389,37 @@ function buildFullHistoryInput(
       continue;
     }
 
+    if (role === "assistant") {
+      // Assistant history is output content. Keep the string form used by the
+      // working pre-image implementation; array-form assistant content only
+      // accepts output_text/refusal blocks on the Codex backend.
+      const assistantText = msg.content
+        .filter((block) => block.type === "text" && block.text)
+        .map((block) => block.text)
+        .join("");
+      if (assistantText) {
+        items.push({ type: "message", role, content: assistantText });
+      }
+    } else {
+      const messageContent: Array<Record<string, unknown>> = [];
+      for (const block of msg.content) {
+        if (block.type === "text" && block.text) {
+          messageContent.push({ type: "input_text", text: block.text });
+        } else if (block.type === "image" && block.image?.dataUrl) {
+          messageContent.push({
+            type: "input_image",
+            image_url: block.image.dataUrl,
+            detail: "auto",
+          });
+        }
+      }
+      if (messageContent.length > 0) {
+        items.push({ type: "message", role, content: messageContent });
+      }
+    }
+
     for (const block of msg.content) {
-      if (block.type === "text" && block.text) {
-        items.push({ type: "message", role, content: block.text });
-      } else if (block.type === "tool_use" && block.name && block.id) {
+      if (block.type === "tool_use" && block.name && block.id) {
         items.push({
           type: "function_call",
           call_id: block.id,

@@ -5,6 +5,7 @@ import type {
   ContentBlock,
   AgentCallbacks,
   SelectionScope,
+  ImageAttachment,
 } from "../types";
 import { sendMessage } from "../api/client";
 import { clearOpenAIState } from "../api/openai";
@@ -18,7 +19,7 @@ const MAX_CONVERSATION_LENGTH = 50;
 const KEEP_RECENT = 40;
 
 // Debug logging: writes transcript to the vault's plugin config folder
-const DEBUG = true;
+const DEBUG = false;
 
 function debugLog(app: App, label: string, data: unknown): void {
   if (!DEBUG) return;
@@ -27,7 +28,7 @@ function debugLog(app: App, label: string, data: unknown): void {
     const entry = `\n--- ${label} [${timestamp}] ---\n${JSON.stringify(data, null, 2)}\n`;
     // Use the adapter to write into the current vault config folder.
     void app.vault.adapter.append(
-      `${app.vault.configDir}/plugins/chatting-with-ai/debug.log`,
+      `${app.vault.configDir}/plugins/chatting-with-ai-plus/debug.log`,
       entry
     );
   } catch {
@@ -81,7 +82,7 @@ export class AgentLoop {
     const systemPrompt = buildSystemPrompt();
 
     const parts: string[] = [
-      `# Chatting with AI Transcript`,
+      `# Chatting with AI Plus Transcript`,
       ``,
       `**Date:** ${new Date().toISOString()}`,
       `**Provider:** ${this.settings.provider}`,
@@ -111,6 +112,9 @@ export class AgentLoop {
             parts.push(``);
             parts.push(block.text);
             parts.push(``);
+          } else if (block.type === "image" && block.image) {
+            parts.push(`_[Attached image: ${block.image.name}]_`);
+            parts.push(``);
           } else if (block.type === "tool_use") {
             parts.push(`### Tool Call: \`${block.name}\``);
             parts.push(``);
@@ -137,7 +141,8 @@ export class AgentLoop {
   async run(
     userMessage: string,
     callbacks: AgentCallbacks,
-    selection?: SelectionScope | null
+    selection?: SelectionScope | null,
+    images: ImageAttachment[] = []
   ): Promise<void> {
     this.aborted = false;
 
@@ -162,7 +167,17 @@ export class AgentLoop {
       fullMessage = `${contextPrefix}\n\n${userMessage}`;
     }
 
-    this.messages.push({ role: "user", content: fullMessage });
+    if (images.length > 0) {
+      this.messages.push({
+        role: "user",
+        content: [
+          { type: "text", text: fullMessage },
+          ...images.map((image) => ({ type: "image" as const, image })),
+        ],
+      });
+    } else {
+      this.messages.push({ role: "user", content: fullMessage });
+    }
 
     // Prune if conversation is too long
     this.pruneHistory();
@@ -170,7 +185,11 @@ export class AgentLoop {
     // System prompt is static (cache-friendly). Built once, identical every call.
     const systemPrompt = buildSystemPrompt();
 
-    debugLog(this.app, "USER_MESSAGE", { userMessage, hasSelection: !!selection });
+    debugLog(this.app, "USER_MESSAGE", {
+      userMessage,
+      hasSelection: !!selection,
+      imageNames: images.map((image) => image.name),
+    });
 
     const maxIterations = this.settings.maxIterations || 20;
 

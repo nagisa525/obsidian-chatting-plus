@@ -140,6 +140,33 @@ function buildCurrentTurnInput(
           role: msg.role === "assistant" ? "assistant" : "user",
           content: msg.content,
         });
+        continue;
+      }
+
+      const messageContent = toOpenAIMessageContent(msg.content, msg.role);
+      if (messageContent.length > 0) {
+        items.push({
+          type: "message",
+          role: msg.role === "assistant" ? "assistant" : "user",
+          content: messageContent,
+        });
+      }
+
+      for (const block of msg.content) {
+        if (block.type === "tool_use" && block.name && block.id) {
+          items.push({
+            type: "function_call",
+            call_id: block.id,
+            name: block.name,
+            arguments: JSON.stringify(block.input ?? {}),
+          });
+        } else if (block.type === "tool_result" && block.tool_use_id) {
+          items.push({
+            type: "function_call_output",
+            call_id: block.tool_use_id,
+            output: block.content ?? "",
+          });
+        }
       }
     }
     return items;
@@ -171,17 +198,45 @@ function buildCurrentTurnInput(
     return items;
   }
 
-  // Text content
-  const text = lastMsg.content.filter((b) => b.type === "text").map((b) => b.text).join("");
-  if (text) {
+  // Text and image content
+  const messageContent = toOpenAIMessageContent(lastMsg.content, lastMsg.role);
+  if (messageContent.length > 0) {
     items.push({
       type: "message",
       role: lastMsg.role === "assistant" ? "assistant" : "user",
-      content: text,
+      content: messageContent,
     });
   }
 
   return items;
+}
+
+function toOpenAIMessageContent(
+  blocks: ContentBlock[],
+  role: UnifiedMessage["role"]
+): string | Array<Record<string, unknown>> {
+  if (role === "assistant") {
+    return blocks
+      .filter((block) => block.type === "text" && block.text)
+      .map((block) => block.text)
+      .join("");
+  }
+
+  const content: Array<Record<string, unknown>> = [];
+
+  for (const block of blocks) {
+    if (block.type === "text" && block.text) {
+      content.push({ type: "input_text", text: block.text });
+    } else if (block.type === "image" && block.image?.dataUrl) {
+      content.push({
+        type: "input_image",
+        image_url: block.image.dataUrl,
+        detail: "auto",
+      });
+    }
+  }
+
+  return content;
 }
 
 // ─── Response Parsing ───────────────────────────────────────────────────────

@@ -221,6 +221,20 @@ function toAnthropicMessage(msg: UnifiedMessage): Record<string, unknown> {
 
   // Content blocks (tool_use responses from assistant, tool_result from user)
   const blocks = msg.content.map((block) => {
+    if (block.type === "image" && block.image) {
+      const parsed = parseImageDataUrl(block.image.dataUrl);
+      if (!parsed) {
+        return { type: "text", text: `[Unsupported image: ${block.image.name}]` };
+      }
+      return {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: parsed.mediaType,
+          data: parsed.data,
+        },
+      };
+    }
     if (block.type === "tool_result") {
       return {
         type: "tool_result",
@@ -241,6 +255,14 @@ function toAnthropicMessage(msg: UnifiedMessage): Record<string, unknown> {
   }).filter((b) => !(b.type === "text" && !b.text));
 
   return { role: msg.role, content: blocks };
+}
+
+function parseImageDataUrl(
+  dataUrl: string
+): { mediaType: string; data: string } | null {
+  const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.+)$/i.exec(dataUrl);
+  if (!match) return null;
+  return { mediaType: match[1].toLowerCase(), data: match[2] };
 }
 
 function fromAnthropicBlock(block: AnthropicContentBlock): ContentBlock | null {

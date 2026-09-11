@@ -1,4 +1,4 @@
-# Chatting with AI
+# Chatting with AI Plus
 
 Agentic AI chat plugin for Obsidian. Simple, mobile-first, three providers (Anthropic + OpenAI + ChatGPT account sign-in).
 
@@ -46,7 +46,7 @@ src/
 
 - **KV cache optimization**: System prompt is static (never includes dynamic context). Dynamic context (active file, selection) goes in the user message after the cached prefix.
 - **Anthropic `cache_control`**: Breakpoints on system prompt and last tool definition.
-- **Per-provider API keys**: Stored as `chatting-with-ai-api-key-anthropic` / `chatting-with-ai-api-key-openai` in `SecretStorage`.
+- **Per-provider API keys**: Stored as `chatting-with-ai-plus-api-key-anthropic` / `chatting-with-ai-plus-api-key-openai` in `SecretStorage`.
 - **In-memory chat persistence**: `AgentLoop` and `chatHistory` live on the plugin instance, surviving view open/close cycles.
 - **Selection scope**: Injected into user message with scoping instructions. Model uses `find_replace` within selection text.
 
@@ -81,4 +81,4 @@ npm run svelte-check   # Svelte check
 
 ## Debug
 
-Set `DEBUG = true` in `src/agent/loop.ts` to write API calls and errors to `<vault-config-dir>/plugins/chatting-with-ai/debug.log`.
+Set `DEBUG = true` in `src/agent/loop.ts` to write API calls and errors to `<vault-config-dir>/plugins/chatting-with-ai-plus/debug.log`.
