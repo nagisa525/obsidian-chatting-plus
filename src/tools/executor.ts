@@ -405,7 +405,8 @@ async function setProperties(
   }
 
   // Use Obsidian's built-in processFrontMatter for safe YAML handling
-  await app.fileManager.processFrontMatter(file, (frontmatter) => {
+  await app.fileManager.processFrontMatter(file, (frontmatter: unknown) => {
+    if (!isRecord(frontmatter)) return;
     for (const [key, value] of Object.entries(props)) {
       if (value === null) {
         delete frontmatter[key];

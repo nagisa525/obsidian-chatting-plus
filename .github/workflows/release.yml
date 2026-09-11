@@ -27,6 +27,7 @@ jobs:
 
       - name: Validate source
         run: |
+          npm run lint
           npx tsc --noEmit
           npm run svelte-check
 

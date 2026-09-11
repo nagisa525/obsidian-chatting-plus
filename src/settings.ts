@@ -46,6 +46,8 @@ export function getModelDisplayName(provider: string, modelId: string): string {
 
 // ─── Settings Tab ───────────────────────────────────────────────────────────
 
+// The declarative settings API requires Obsidian 1.13.0. Keep display() while
+// this plugin supports 1.11.4+, then migrate after 1.13 is broadly available.
 export class ChatSettingTab extends PluginSettingTab {
   plugin: ChatPlugin;
 
@@ -185,7 +187,7 @@ export class ChatSettingTab extends PluginSettingTab {
   private renderChatGPTOAuthSection(containerEl: HTMLElement): void {
     const credential = this.plugin.chatgptOAuth.getCredential();
 
-    const explainer = containerEl.createEl("div", {
+    const explainer = containerEl.createDiv({
       cls: "setting-item-description ochatting-oauth-explainer",
     });
     explainer.createSpan({
@@ -380,7 +382,7 @@ class ChatGPTDeviceLoginModal extends Modal {
     contentEl.createEl("p", {
       text: "1. Open this page in any browser:",
     });
-    const linkRow = contentEl.createEl("div", { cls: "ochatting-device-link-row" });
+    const linkRow = contentEl.createDiv({ cls: "ochatting-device-link-row" });
     const link = linkRow.createEl("a", {
       text: this.authorization.verificationUri,
       href: this.authorization.verificationUri,
@@ -389,7 +391,7 @@ class ChatGPTDeviceLoginModal extends Modal {
     link.setAttr("rel", "noopener");
 
     contentEl.createEl("p", { text: "2. Enter this code on the page:" });
-    const codeRow = contentEl.createEl("div", { cls: "ochatting-device-code-row" });
+    const codeRow = contentEl.createDiv({ cls: "ochatting-device-code-row" });
 
     codeRow.createEl("code", {
       text: this.authorization.userCode,
@@ -409,7 +411,7 @@ class ChatGPTDeviceLoginModal extends Modal {
       cls: "ochatting-device-status",
     });
 
-    const buttons = contentEl.createEl("div", { cls: "ochatting-device-buttons" });
+    const buttons = contentEl.createDiv({ cls: "ochatting-device-buttons" });
 
     const openBtn = buttons.createEl("button", { text: "Open login page" });
     openBtn.classList.add("mod-cta");

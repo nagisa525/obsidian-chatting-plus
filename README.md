@@ -1,5 +1,7 @@
 # Chatting with AI Plus
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 [![Latest release](https://img.shields.io/github/v/release/nagisa525/obsidian-chatting-plus?include_prereleases&label=release&color=7c3aed)](https://github.com/nagisa525/obsidian-chatting-plus/releases)
 [![Total downloads](https://img.shields.io/github/downloads/nagisa525/obsidian-chatting-plus/total?color=7c3aed)](https://github.com/nagisa525/obsidian-chatting-plus/releases)
 [![License](https://img.shields.io/github/license/nagisa525/obsidian-chatting-plus?color=7c3aed)](LICENSE)
@@ -8,6 +10,8 @@
 **An agentic AI assistant that lives in your Obsidian vault — same experience on phone, tablet, and desktop.**
 
 > Chatting with AI Plus is an independent MIT-licensed fork of [Chatting with AI](https://github.com/o1xhack/obsidian-chatting). It preserves the upstream authors' copyright and adds named conversation history, image input, Markdown math rendering, and a stable mobile chat layout.
+>
+> Special thanks to the maintainers of [o1xhack/obsidian-chatting](https://github.com/o1xhack/obsidian-chatting) for creating the open-source foundation on which this project is built.
 
 <p align="center">
   <img src="assets/screenshot-settings.png" alt="Provider settings on iPhone" width="260">
@@ -214,7 +218,7 @@ Issues and PRs welcome. Before opening a PR:
 
 ## 🙏 Acknowledgements
 
-Chatting with AI Plus is derived from [o1xhack/obsidian-chatting](https://github.com/o1xhack/obsidian-chatting), which was originally derived from [omarshahine/obsidian-chat](https://github.com/omarshahine/obsidian-chat). Both upstream projects are MIT licensed. Their copyright notices are preserved in `LICENSE`, and this fork documents its additional work above.
+Special thanks to the maintainers and contributors of [o1xhack/obsidian-chatting](https://github.com/o1xhack/obsidian-chatting), whose open-source work provides the foundation for Chatting with AI Plus. That project was originally derived from [omarshahine/obsidian-chat](https://github.com/omarshahine/obsidian-chat). Both upstream projects are MIT licensed. Their copyright notices are preserved in `LICENSE`, and this fork documents its additional work above.
 
 ## 📄 License
 

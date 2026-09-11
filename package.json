@@ -1,11 +1,17 @@
 {
   "name": "chatting-with-ai-plus",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "author": {
     "name": "nagisa525",
     "url": "https://github.com/nagisa525"
   },
+  "contributors": [
+    {
+      "name": "Yuxiao (o1xhack)",
+      "url": "https://github.com/o1xhack"
+    }
+  ],
   "homepage": "https://github.com/nagisa525/obsidian-chatting-plus",
   "bugs": {
     "url": "https://github.com/nagisa525/obsidian-chatting-plus/issues"
@@ -17,6 +23,7 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
+    "lint": "eslint src",
     "svelte-check": "svelte-check --tsconfig tsconfig.json",
     "release": "./scripts/release.sh",
     "codex:login": "node test/codex-login.mjs",
@@ -26,6 +33,8 @@
     "@types/node": "^22.0.0",
     "esbuild": "^0.28.2",
     "esbuild-svelte": "^0.9.5",
+    "eslint": "^10.10.0",
+    "eslint-plugin-obsidianmd": "^0.4.2",
     "obsidian": "^1.11.4",
     "svelte": "^5.57.0",
     "svelte-check": "^4.4.5",

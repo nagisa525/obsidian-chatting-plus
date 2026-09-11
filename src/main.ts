@@ -56,7 +56,7 @@ export default class ChatPlugin extends Plugin {
     this.registerView(VIEW_TYPE_CHAT, (leaf) => new ObsidianChatView(leaf, this));
 
     // Ribbon icon (users can hide; commands are the primary access)
-    this.addRibbonIcon("message-circle", "Open Chatting with AI Plus", (evt) => {
+    this.addRibbonIcon("message-circle", "Open chat", (evt) => {
       if (evt.type === "contextmenu" || evt.button === 2) {
         // Right-click: show menu with options
         const menu = new Menu();
@@ -101,7 +101,7 @@ export default class ChatPlugin extends Plugin {
     // Editor command: chat about selected text (conditional, only when text is selected)
     this.addCommand({
       id: "send-selection",
-      name: "Send selection to Chat",
+      name: "Send selection to chat",
       editorCheckCallback: (checking: boolean, editor: Editor, ctx: MarkdownFileInfo) => {
         const sel = editor.getSelection();
         if (!sel || sel.length === 0) return false;
@@ -134,7 +134,7 @@ export default class ChatPlugin extends Plugin {
         if (sel && sel.length > 0) {
           menu.addItem((item) =>
             item
-              .setTitle("Send selection to Chat")
+              .setTitle("Send selection to chat")
               .setIcon("message-circle")
               .onClick(() => {
                 const scope: SelectionScope = { text: sel, filePath: info.file?.path ?? "" };
@@ -390,8 +390,8 @@ export default class ChatPlugin extends Plugin {
         const legacyHistory = Array.isArray(state.chatHistory) ? state.chatHistory : [];
         const legacyAgentMessages = Array.isArray(state.agentMessages) ? state.agentMessages : [];
         const migrated = this.makeEmptyConversation();
-        migrated.chatHistory = legacyHistory as ChatHistoryEntry[];
-        migrated.agentMessages = legacyAgentMessages as ConversationRecord["agentMessages"];
+        migrated.chatHistory = legacyHistory;
+        migrated.agentMessages = legacyAgentMessages;
         migrated.title = deriveConversationTitle(migrated.chatHistory);
         this.conversations = [migrated];
         this.activeConversationId = migrated.id;
@@ -584,7 +584,7 @@ function deriveConversationTitle(history: ChatHistoryEntry[]): string {
 }
 
 function makeConversationId(): string {
-  return globalThis.crypto?.randomUUID?.()
+  return window.crypto?.randomUUID?.()
     ?? `conversation-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
